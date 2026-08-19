@@ -61,12 +61,6 @@ public class OpenApiConfig {
                 .servers(List.of(
                         new Server().url("http://localhost:8080").description("本地开发环境"),
                         new Server().url("/").description("当前部署环境（相对路径）")))
-                .tags(List.of(
-                        new Tag().name("认证").description("注册 / 登录 / 刷新 / 登出（Phase 1）"),
-                        new Tag().name("简历").description("简历 CRUD 与解析（Phase 2）"),
-                        new Tag().name("职位").description("职位 CRUD 与缓存（Phase 2）"),
-                        new Tag().name("面试").description("模拟面试会话、消息与报告（Phase 3）"),
-                        new Tag().name("AI 任务").description("AI 异步任务状态查询（Phase 6）")))
                 .components(new Components()
                         .addSecuritySchemes(SECURITY_SCHEME_NAME,
                                 new SecurityScheme()

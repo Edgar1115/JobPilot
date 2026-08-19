@@ -9,9 +9,10 @@
 | 维度 | 状态 |
 |---|---|
 | Core Phase | **Phase 0 完成** —— 工程骨架可运行（8080 / 8000 / MySQL / Redis / RabbitMQ 均正常） |
+| Core Phase | **Phase 0.5 完成** —— Persistence CRUD Foundation（MyBatis + MySQL + job_position CRUD，见下） |
 | Lab | 22 项 Backlog，均 `DISCOVERED`（见 `TECH_INDEX.md`） |
 | Reference | 0 项 |
-| 构建 | `jobpilot-server`: `mvn test` 通过（Spring Boot 3.5.16，中间件连接正常） |
+| 构建 | `jobpilot-server`: `mvn test` 通过（Spring Boot 3.5.16，中间件连接正常，含真实 MySQL CRUD IT） |
 
 ## 二、已完成事项
 
@@ -78,6 +79,38 @@
    - `/v3/api-docs` → OpenAPI JSON 正常，`OpenApiConfig` 元数据原样渲染
    - 依赖树：springdoc 2.8.17 + knife4j 4.6.0（core + openapi3-ui），`mvn compile` 通过
 
+### 2026-08-19 — Core Phase 0.5：Persistence CRUD Foundation
+
+> 目标：只建立 Java + MyBatis + MySQL 基础持久化底座，打通最基础的增删改查链路。
+> 明确不实现（属后续 Phase）：JWT / Spring Security / Redis Cache / RabbitMQ 业务 / AI / SSE / RAG / 限流 / 幂等 / AOP OperationLog。
+
+1. **数据库（规格书 v2.0 第 9~17 章）**：新增 `deploy/mysql/schema.sql`（仅 DDL）+ `deploy/mysql/seed.sql`（仅测试数据）
+   - 8 张表：`sys_user` / `resume` / `job_position` / `interview_session` / `interview_message` / `interview_report` / `ai_task` / `user_skill_profile`
+   - 字段名称/类型/索引/约束与规格书完全一致；utf8mb4；主键 BIGINT（Snowflake 生成，不用 AUTO_INCREMENT）
+   - 未建 `knowledge_document` / `operation_log`（规格书尚未给出完整字段定义）
+   - docker-compose 增加 `./mysql:/docker-entrypoint-initdb.d` 挂载（新建数据卷时自动初始化）
+2. **MyBatis**：`pom.xml` 引入 `mybatis-spring-boot-starter:3.0.5`（Spring Boot 3.5.x / Java 17 兼容，非 MyBatis-Plus / JPA）
+   - `application.yml`：`mybatis.mapper-locations=classpath:mapper/*.xml`、`map-underscore-to-camel-case: true`
+   - `JobPilotApplication` 加 `@MapperScan("com.jobpilot.mapper")`
+3. **Entity ×8**：`com.jobpilot.entity` 下 SysUser / Resume / JobPosition / InterviewSession / InterviewMessage / InterviewReport / AiTask / UserSkillProfile
+   - 类型映射：BIGINT→Long、VARCHAR/TEXT→String、TINYINT→Integer、DECIMAL→BigDecimal、DATETIME(3)→LocalDateTime、JSON→String（本阶段）；Lombok @Data
+   - snake_case ↔ camelCase 由 MyBatis 自动映射
+4. **Enum ×4**：`com.jobpilot.enums` 下 ResumeParseStatus（PENDING/PARSING/SUCCESS/FAILED）、InterviewSessionStatus（CREATED/ACTIVE/FINISHED/REPORT_PENDING/REPORTING/COMPLETED/ABORTED）、InterviewRole（SYSTEM/INTERVIEWER/USER）、AiTaskStatus（PENDING/RUNNING/SUCCESS/FAILED/DEAD）—— 仅规格书定义的状态，不新增
+5. **SnowflakeIdGenerator**：`com.jobpilot.common`，最小单 JVM（datacenterId=0 / workerId=1，不注册、不依赖 Redis、不建 ID Service），线程安全、支持序列溢出自旋与时钟回拨保护
+6. **job_position CRUD 样板**（唯一完整 CRUD，其余 7 表仅 Entity）
+   - 分层：`controller/JobPositionController` → `service/JobPositionService(+Impl)` → `mapper/JobPositionMapper`(+XML) → MySQL
+   - DTO/VO：`JobCreateDTO` / `JobUpdateDTO` / `JobVO`（Controller 不直接收发 Entity，jakarta validation + @Schema）
+   - Mapper：insert / selectById / selectList / updateById / deleteById（deleteById 供 IT 用，HTTP 暂不暴露 DELETE）；XML 显式列名，禁止 SELECT *
+   - ServiceImpl：Snowflake 主键、createTime/updateTime、默认 status=1、Entity/DTO/VO 转换、资源不存在 → `BusinessException(NOT_FOUND=40400)`
+7. **Integration Test**：`JobPositionMapperIT`（@SpringBootTest 连真实 MySQL）完整验证 INSERT → SELECT → UPDATE → DELETE → 再次 SELECT 确认不存在；测试数据专用标识（user_id=999999999、TEST_CRUD_ 前缀）+ @AfterEach 兜底删除，测试后零残留
+   - surefire 增加 `**/*IT.java` include，`mvn test` 一并执行
+8. **验收结果**
+   - `mvn test`：Tests run 2（IT + contextLoads），Failures 0, Errors 0，**BUILD SUCCESS**
+   - 8 张表已建（docker exec 应用 schema+seed，`--default-character-set=utf8mb4` 避免中文双重编码）；seed 3 条 job_position
+   - 手工 CRUD（HTTP）：POST 创建（Snowflake id / status=1）→ GET /{id} → GET 列表（4 条，含 seed）→ PUT 更新（updateTime 刷新）→ 不存在 id 返回 40400 → 缺字段返回 40001，全部符合预期
+   - Phase 0 原有全部保持正常：`/actuator/health`（db/redis/rabbit UP）、`/api/v1/ping`、`/doc.html`（Knife4j 显示新增 4 个职位接口）
+9. **踩坑记录**：`docker exec -i mysql < seed.sql` 默认客户端字符集会双重编码中文 → 必须加 `--default-character-set=utf8mb4`（schema.sql/seed.sql 头部注释已写明执行方式）
+
 ## 三、环境与注意事项
 
 - **中间件**：由 Docker Desktop 统一管理（`docker compose -f deploy/docker-compose.yml up -d`）。
@@ -104,12 +137,22 @@
 
 - **IDEA 需重新导入**：Java 工程已移至 `jobpilot-server/` 子目录，`.idea/` 为本地未跟踪文件，路径已失效，需重新导入 Maven 工程。
 - Phase 0 的 `Result.requestId` 目前为 null，将在 Phase 1 的 RequestIdFilter（规格书 #20/#47）中填充。
+- **建表 / 种子数据（Phase 0.5）**：`deploy/mysql/schema.sql` + `seed.sql`。手动应用时客户端必须显式指定 utf8mb4，否则中文双重编码：
+
+  ```bash
+  docker exec -i jobpilot-mysql mysql --default-character-set=utf8mb4 -ujobpilot -pjobpilot123 jobpilot < deploy/mysql/schema.sql
+  docker exec -i jobpilot-mysql mysql --default-character-set=utf8mb4 -ujobpilot -pjobpilot123 jobpilot < deploy/mysql/seed.sql
+  ```
+
+  新建数据卷时 docker-compose 会通过 `/docker-entrypoint-initdb.d` 自动执行（官方镜像默认 utf8mb4）。
+- **主键说明（Phase 0.5）**：业务主键一律由 `SnowflakeIdGenerator`（单 JVM）生成 BIGINT，数据库不启用 AUTO_INCREMENT；写库必须显式携带 id。
 
 ## 四、待办 Backlog
 
 ### Core Phase（严格按序，一次只做一个阶段）
 
 - [x] **Phase 0 工程骨架**：Result / 全局异常 / Health / FastAPI 最小服务 / `deploy/docker-compose.yml`（MySQL + Redis + RabbitMQ management）—— 已验收：8080、8000、MySQL、Redis、RabbitMQ 正常
+- [x] **Phase 0.5 Persistence CRUD Foundation**：schema.sql/seed.sql（8 表）/ MyBatis / 8 Entity / 4 Enum / SnowflakeIdGenerator / job_position CRUD 样板 / JobPositionMapperIT —— 已验收：`mvn test` BUILD SUCCESS，手工 CRUD 通过，Phase 0 三件套保持正常
 - [ ] **Phase 1 Authentication**：`sys_user` / Register / Login / JWT / FilterChain / Refresh / Logout
 - [ ] **Phase 2 Resume + Job**：CRUD / Upload / Ownership / Redis Job Cache（Cache Aside + Null Cache）
 - [ ] **Phase 3 Interview**（FakeAIService）：Session 状态机 / Message / Start / Answer / Finish

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jobpilot.mapper.JobPositionMapper">
+
+    <!-- 显式列出全部列，禁止 SELECT * -->
+    <sql id="allColumns">
+        id, user_id, company_name, position_name, jd_text, status, create_time, update_time
+    </sql>
+
+    <insert id="insert" parameterType="com.jobpilot.entity.JobPosition">
+        INSERT INTO job_position
+            (id, user_id, company_name, position_name, jd_text, status, create_time, update_time)
+        VALUES
+            (#{id}, #{userId}, #{companyName}, #{positionName}, #{jdText}, #{status}, #{createTime}, #{updateTime})
+    </insert>
+
+    <select id="selectById" resultType="com.jobpilot.entity.JobPosition">
+        SELECT
+        <include refid="allColumns"/>
+        FROM job_position
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectList" resultType="com.jobpilot.entity.JobPosition">
+        SELECT
+        <include refid="allColumns"/>
+        FROM job_position
+        ORDER BY create_time DESC, id DESC
+    </select>
+
+    <!-- 动态更新：只更新传入的非空字段；update_time 由 Service 层始终赋值 -->
+    <update id="updateById" parameterType="com.jobpilot.entity.JobPosition">
+        UPDATE job_position
+        <set>
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="companyName != null">company_name = #{companyName},</if>
+            <if test="positionName != null">position_name = #{positionName},</if>
+            <if test="jdText != null">jd_text = #{jdText},</if>
+            <if test="status != null">status = #{status},</if>
+            update_time = #{updateTime}
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM job_position
+        WHERE id = #{id}
+    </delete>
+
+</mapper>

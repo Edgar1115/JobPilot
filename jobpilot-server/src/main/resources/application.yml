@@ -29,6 +29,12 @@ spring:
     time-zone: Asia/Shanghai
     date-format: yyyy-MM-dd HH:mm:ss
 
+# MyBatis（Phase 0.5）：XML 统一放 src/main/resources/mapper/，snake_case 自动映射 camelCase
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
 management:
   endpoints:
     web:

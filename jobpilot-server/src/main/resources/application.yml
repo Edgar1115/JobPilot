@@ -1,0 +1,68 @@
+# JobPilot 主配置（规格书 v2.0 第 58 章）
+# 敏感值走环境变量，本地开发使用括号内默认值（仅限本地，生产必须注入环境变量）。
+server:
+  port: 8080
+
+spring:
+  application:
+    name: JobPilot
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:jobpilot}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER:jobpilot}
+    password: ${MYSQL_PASSWORD:jobpilot123}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # password: ${REDIS_PASSWORD:}   # 本地 docker 未设密码，生产环境必须配置
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:jobpilot}
+    password: ${RABBITMQ_PASSWORD:jobpilot123}
+
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+jobpilot:
+  jwt:
+    # 生产环境必须通过 JWT_SECRET 注入强密钥
+    secret: ${JWT_SECRET:dev-only-jwt-secret-change-me-0123456789abcdef}
+    access-ttl-seconds: 1800    # 30 min（规格书 #19）
+    refresh-ttl-seconds: 604800 # 7 days
+  ai:
+    base-url: ${AI_BASE_URL:http://localhost:8000}
+    internal-token: ${AI_INTERNAL_TOKEN:dev-internal-token}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+# Knife4j 增强文档界面（访问入口：/doc.html，基于 springdoc 的 OpenAPI 规范渲染）
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn            # 中文界面
+    enable-footer: false       # 去掉默认底部版权
+    enable-footer-custom: true
+    footer-custom-content: JobPilot © 2024 · Apache License 2.0
+    enable-search: true        # 顶部接口搜索
+    enable-open-api: true      # 显示 OpenAPI 规范地址

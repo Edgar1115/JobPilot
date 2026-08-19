@@ -1,0 +1,7 @@
+# JobPilot local 开发环境配置（profile=local 覆盖）
+# 用法：java -jar jobpilot-server.jar --spring.profiles.active=local
+# 说明：默认配置已可直接连接本地 docker 中间件（见 application.yml 默认值）；
+#       本文件用于本地覆盖，例如本地中间件使用非默认端口/凭据时在此调整。
+spring:
+  application:
+    name: JobPilot
